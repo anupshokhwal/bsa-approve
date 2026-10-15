@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0B0C">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Before She Asks · Approval</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap">
+<style>
+  /* Approval page for the Before She Asks app.
+     The app shows a QR code / sends a link ending in #<token>. This page reads the
+     token, shows the list, and on Approve tells the server — the stamp then lands
+     in the app on its own. Nothing here is secret: the key below is Supabase's
+     public "publishable" key, and the server only acts on a valid token. */
+  :root {
+    --bg: #0B0B0C; --text: #F2F2F2; --soft: #C9C9CE; --muted: #9A9AA0;
+    --line: #1E1E21; --card: #141416; --accent: #3A66E8; --accent-press: #2F57CF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: 'Sora', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+    display: flex; justify-content: center;
+  }
+  main {
+    width: 100%; max-width: 480px; min-height: 100dvh;
+    padding: calc(28px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--soft); font-size: 14px; }
+  h1 { margin: 0; font-weight: 300; font-size: 30px; line-height: 1.25; }
+  h1 .name { color: var(--accent); font-weight: 400; }
+  p { margin: 0; }
+  .sub { color: var(--soft); font-size: 15px; line-height: 1.55; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  li .dot { width: 8px; height: 8px; border-radius: 4px; background: var(--accent); margin-top: 8px; flex-shrink: 0; }
+  li .label { font-size: 16px; }
+  li .when { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .spacer { flex: 1; }
+  .actions { display: flex; flex-direction: column; gap: 10px; }
+  button {
+    font: inherit; border: 0; cursor: pointer; border-radius: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .primary { height: 60px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; }
+  .primary:active { background: var(--accent-press); }
+  .primary[disabled] { opacity: .6; cursor: default; }
+  .link { align-self: center; background: none; color: var(--soft); font-size: 14px; padding: 12px 16px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .note { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; text-align: center; }
+  .stamp {
+    border: 4px solid var(--accent); color: var(--accent); border-radius: 14px;
+    padding: 10px 22px; font-size: 32px; font-weight: 600; letter-spacing: .1em;
+    transform: rotate(-10deg); animation: stamp .45s cubic-bezier(.2,1.6,.4,1) .15s both;
+    margin-bottom: 20px;
+  }
+  @keyframes stamp { from { transform: scale(2.2) rotate(-10deg); opacity: 0; } to { transform: scale(1) rotate(-10deg); opacity: 1; } }
+  .big { font-size: 24px; font-weight: 300; }
+  .msg { color: var(--soft); font-size: 15px; line-height: 1.55; max-width: 320px; }
+  .toast { color: var(--soft); background: var(--card); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite">
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <path d="M18 12h28a10 10 0 0 1 10 10v12a10 10 0 0 1-10 10H28l-12 9 2-9a10 10 0 0 1-10-10V22a10 10 0 0 1 10-10z" stroke="#F2F2F2" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="21" cy="28" r="2.8" fill="#F2F2F2"/><circle cx="30" cy="28" r="2.8" fill="#F2F2F2"/>
+      <path d="M37 28.5l3.6 3.6 7.4-8.6" stroke="#3A66E8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Before She Asks</span>
+  </div>
+
+  <!-- Loading -->
+  <section id="loading" class="center"><p class="msg" data-t="loading"></p></section>
+
+  <!-- The list -->
+  <section id="list" hidden style="display:flex;flex-direction:column;gap:22px;flex:1">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <h1 id="title"></h1>
+      <p class="sub" data-t="sub"></p>
+    </div>
+    <ul id="items"></ul>
+    <div class="spacer"></div>
+    <p id="notyetmsg" class="toast" hidden data-t="notYetMsg"></p>
+    <div class="actions">
+      <button id="approve" class="primary" data-t="approve"></button>
+      <button id="notyet" class="link" data-t="notYet"></button>
+      <p class="note" data-t="privacy"></p>
+    </div>
+  </section>
+
+  <!-- Approved -->
+  <section id="done" class="center" hidden>
+    <div class="stamp" data-t="stamp"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;align-items:center">
+      <p id="doneTitle" class="big"></p>
+      <p class="msg" data-t="doneSub"></p>
+    </div>
+  </section>
+
+  <!-- Expired / used / bad link -->
+  <section id="missing" class="center" hidden>
+    <p class="big" data-t="missingTitle"></p>
+    <p class="msg" data-t="missingSub"></p>
+  </section>
+
+  <!-- No connection -->
+  <section id="error" class="center" hidden>
+    <p class="big" data-t="errorTitle"></p>
+    <p class="msg" data-t="errorSub"></p>
+    <button id="retry" class="primary" style="width:100%;max-width:320px" data-t="retry"></button>
+  </section>
+
+  <p class="note" data-t="footer"></p>
+</main>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://jmiljyfnltlzriorjckf.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_AIVGfrlciBrNP9MCkMr1cA_wvWZYqvk'; // public by design
+
+  // Words, in the same four languages as the app. The list arrives in the app's language.
+  var T = {
+    en: {
+      loading: 'Opening the list…',
+      title: '{name}, a list for your approval.',
+      sub: "From someone who'd rather not need reminding. These will happen without you having to say a word:",
+      approve: 'Approve', approving: 'Approving…', notYet: 'Not yet',
+      notYetMsg: "No problem. Tell them what to change, and they'll send you a new one.",
+      privacy: "No account needed. This list is deleted as soon as it's approved, or after 7 days.",
+      stamp: 'APPROVED ✓', doneTitle: 'Done. Thank you, {name}.',
+      doneSub: 'The stamp just landed on their phone. You can close this page.',
+      missingTitle: 'This link has expired.', missingSub: "It's already been used, or it's more than 7 days old. Ask them to send a new one.",
+      errorTitle: "Couldn't connect.", errorSub: 'Check your internet and try again.', retry: 'Try again',
+      footer: 'Forget things too? It happens to the best of us.'
+    },
+    hinglish: {
+      loading: 'List khul rahi hai…',
+      title: '{name}, aapki approval ke liye ek list.',
+      sub: 'Kisi aise ki taraf se jo yaad dilwana nahi chahta. Yeh sab bina aapke kahe hoga:',
+      approve: 'Approve karo', approving: 'Approve ho raha hai…', notYet: 'Abhi nahi',
+      notYetMsg: 'Koi baat nahi. Unhe batao kya badalna hai, woh nayi list bhej denge.',
+      privacy: 'Koi account nahi chahiye. Approve hote hi yeh list mit jaati hai, ya 7 din baad.',
+      stamp: 'APPROVED ✓', doneTitle: 'Ho gaya. Shukriya, {name}.',
+      doneSub: 'Stamp unke phone pe lag gaya. Ab yeh page band kar sakte ho.',
+      missingTitle: 'Yeh link expire ho gaya.', missingSub: 'Ya toh use ho chuka hai, ya 7 din se purana hai. Nayi bhejne ko kaho.',
+      errorTitle: 'Connect nahi ho paaya.', errorSub: 'Internet check karke phir try karo.', retry: 'Phir try karo',
+      footer: 'Aap bhi bhool jaate ho? Sabke saath hota hai.'
+    },
+    hi: {
+      loading: 'लिस्ट खुल रही है…',
+      title: '{name}, आपकी मंज़ूरी के लिए एक लिस्ट।',
+      sub: 'किसी ऐसे की तरफ़ से जो याद दिलवाना नहीं चाहता। ये सब बिना आपके कहे होगा:',
+      approve: 'मंज़ूर करो', approving: 'मंज़ूर हो रहा है…', notYet: 'अभी नहीं',
+      notYetMsg: 'कोई बात नहीं। उन्हें बताओ क्या बदलना है, वो नई लिस्ट भेज देंगे।',
+      privacy: 'कोई अकाउंट नहीं चाहिए। मंज़ूर होते ही यह लिस्ट मिट जाती है, या 7 दिन बाद।',
+      stamp: 'मंज़ूर ✓', doneTitle: 'हो गया। शुक्रिया, {name}।',
+      doneSub: 'स्टैम्प उनके फ़ोन पर लग गया। अब यह पेज बंद कर सकते हो।',
+      missingTitle: 'यह लिंक पुराना हो गया।', missingSub: 'या तो इस्तेमाल हो चुका है, या 7 दिन से पुराना है। नया भेजने को कहो।',
+      errorTitle: 'कनेक्ट नहीं हो पाया।', errorSub: 'इंटरनेट देखकर फिर कोशिश करो।', retry: 'फिर कोशिश करो',
+      footer: 'आप भी भूल जाते हो? सबके साथ होता है।'
+    },
+    es: {
+      loading: 'Abriendo la lista…',
+      title: '{name}, una lista para tu aprobación.',
+      sub: 'De alguien que preferiría no necesitar recordatorios. Esto pasará sin que tengas que decir nada:',
+      approve: 'Aprobar', approving: 'Aprobando…', notYet: 'Todavía no',
+      notYetMsg: 'Sin problema. Dile qué cambiar y te enviará una nueva.',
+      privacy: 'Sin cuenta. Esta lista se borra en cuanto se aprueba, o a los 7 días.',
+      stamp: 'APROBADO ✓', doneTitle: 'Listo. Gracias, {name}.',
+      doneSub: 'El sello acaba de llegar a su teléfono. Ya puedes cerrar esta página.',
+      missingTitle: 'Este enlace ha caducado.', missingSub: 'Ya se usó o tiene más de 7 días. Pide que te envíen uno nuevo.',
+      errorTitle: 'No se pudo conectar.', errorSub: 'Revisa tu conexión e inténtalo de nuevo.', retry: 'Reintentar',
+      footer: '¿Tú también olvidas cosas? Le pasa a cualquiera.'
+    }
+  };
+
+  var token = (location.hash || '').replace(/^#/, '').trim();
+  var lang = 'en';
+  var data = null;
+  var $ = function (id) { return document.getElementById(id); };
+  var t = function (k) { return (T[lang] && T[lang][k]) || T.en[k]; };
+
+  function fill() {
+    document.documentElement.lang = lang === 'hinglish' ? 'en' : lang;
+    var els = document.querySelectorAll('[data-t]');
+    for (var i = 0; i < els.length; i++) els[i].textContent = t(els[i].getAttribute('data-t'));
+  }
+  function show(id) {
+    ['loading', 'list', 'done', 'missing', 'error'].forEach(function (s) { $(s).hidden = s !== id; });
+  }
+  // Name is user text: always set with textContent, never as HTML.
+  function withName(el, template, name) {
+    el.textContent = '';
+    var parts = template.split('{name}');
+    parts.forEach(function (p, i) {
+      if (i > 0) { var s = document.createElement('span'); s.className = 'name'; s.textContent = name; el.appendChild(s); }
+      el.appendChild(document.createTextNode(p));
+    });
+  }
+  function rpc(name, body) {
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text().then(function (x) { return x ? JSON.parse(x) : null; });
+    });
+  }
+
+  function renderList() {
+    withName($('title'), t('title'), data.partner_name);
+    var ul = $('items'); ul.textContent = '';
+    (data.items || []).forEach(function (it) {
+      var li = document.createElement('li');
+      var dot = document.createElement('div'); dot.className = 'dot';
+      var box = document.createElement('div');
+      var l = document.createElement('div'); l.className = 'label'; l.textContent = it.label || '';
+      box.appendChild(l);
+      if (it.when) { var w = document.createElement('div'); w.className = 'when'; w.textContent = it.when; box.appendChild(w); }
+      li.appendChild(dot); li.appendChild(box); ul.appendChild(li);
+    });
+    show('list');
+  }
+  function renderDone() {
+    withName($('doneTitle'), t('doneTitle'), data ? data.partner_name : '');
+    show('done');
+  }
+
+  function load() {
+    fill(); show('loading');
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) { show('missing'); return; }
+    rpc('get_approval', { p_token: token }).then(function (rows) {
+      data = rows && rows[0];
+      if (!data) { show('missing'); return; }
+      if (T[data.lang]) lang = data.lang;
+      fill();
+      if (data.approved_at) renderDone(); else renderList();
+    }).catch(function () { show('error'); });
+  }
+
+  $('approve').addEventListener('click', function () {
+    var b = $('approve'); b.disabled = true; b.textContent = t('approving');
+    rpc('approve', { p_token: token }).then(function (ok) {
+      if (ok === true) { if (navigator.vibrate) navigator.vibrate(60); renderDone(); }
+      else show('missing');
+    }).catch(function () {
+      b.disabled = false; b.textContent = t('approve'); show('error');
+    });
+  });
+  $('notyet').addEventListener('click', function () { $('notyetmsg').hidden = false; });
+  $('retry').addEventListener('click', load);
+  window.addEventListener('hashchange', function () { token = location.hash.replace(/^#/, '').trim(); load(); });
+  load();
+})();
+</script>
+</body>
+</html>
