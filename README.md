@@ -1,7 +1,8 @@
 # bsa-approve
 
 The approval page for the **Before She Asks** app, served by GitHub Pages at
-https://anupshokhwal.github.io/bsa-approve/
+https://approve.asakpns.com/ (custom domain; `CNAME` file here, DNS record `approve` CNAME → `anupshokhwal.github.io` on asakpns.com at Namecheap).
+The old address https://anupshokhwal.github.io/bsa-approve/ redirects there automatically.
 
 The app shows a QR code (or shares a link) ending in `#<token>`. This page shows the
 reminder list and lets the partner tap **Approve**; the app then shows the stamp.
